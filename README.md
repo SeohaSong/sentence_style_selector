@@ -1,1 +1,6 @@
 # style_converter
+
+```bash
+python preprocess.py
+python tag.py
+```
