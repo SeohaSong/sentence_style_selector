@@ -68,7 +68,7 @@ def save_df_pos(df, label):
 if __name__ == "__main__":
 
     print("[tag.py] Loading data ...")
-    lable2df = load_df(40000)
+    lable2df = load_df()
 
     for label in LABELS:
         print("[tag.py] Saving pos dataframe %s ..." % label)
