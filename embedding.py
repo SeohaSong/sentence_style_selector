@@ -85,7 +85,7 @@ def save_lookup_table(model):
     pd.to_pickle(lookup_table, "./data/lookup_table")
 
 
-def save_df_idxs(model, df):
+def save_df(model, df):
 
     def get_idxs(i, ws):
         nonlocal words
@@ -102,13 +102,13 @@ def save_df_idxs(model, df):
     )
 
     df['pos'] = se_idxs
-    pd.to_pickle(df, "./data/se_idxs")
+    pd.to_pickle(df, "./data/df")
 
 
 if __name__ == "__main__":
 
     print("[embedding.py] Loading data ...")
-    df = load_df(100)
+    df = load_df()
     print("[embedding.py] Merging word and pos ...")    
     df = get_words(df)
     print()
@@ -120,6 +120,6 @@ if __name__ == "__main__":
     print("[embedding.py] Saving lookup table ...")
     save_lookup_table(model)
     print()
-    print("[embedding.py] Saving index series ...")
-    save_df_idxs(model, df)
+    print("[embedding.py] Saving final dataframe ...")
+    save_df(model, df)
     print()
