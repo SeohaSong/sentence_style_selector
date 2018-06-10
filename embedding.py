@@ -6,7 +6,7 @@ import os
 from gensim.models import Word2Vec
 
 
-def load_df(n_batch):
+def load_df(n_batch=None):
     
     def get_df(label):
         nonlocal n_batch
@@ -28,7 +28,7 @@ def load_df(n_batch):
     return df
 
 
-def get_se_words(df):
+def get_words(df):
     
     def get_words(i, pos):
         words = np.array(["-".join(word) for word in pos])
@@ -40,17 +40,18 @@ def get_se_words(df):
         [get_words(i, p) for i, p in enumerate(df['pos'])],
         index=df.index
     )
-    
-    return se_words
+    df['pos'] = se_words
+
+    return df
 
 
-def save_w2v_model(se_words):
+def save_w2v_model(df):
     
     n_size = 512
     n_winow = 8
     min_count = 1
     workers = os.cpu_count()
-    sens = [sen.tolist() for sen in se_words]
+    sens = [sen.tolist() for sen in df['pos']]
 
     model = Word2Vec(
         sens,
@@ -84,22 +85,24 @@ def save_lookup_table(model):
     pd.to_pickle(lookup_table, "./data/lookup_table")
 
 
-def save_se_idxs(model, se_words):
-    
+def save_df_idxs(model, df):
+
     def get_idxs(i, ws):
         nonlocal words
         idxs = np.array([words.index(w) for w in ws])
         nonlocal se_words
-        sys.stdout.write("\r% 5.2f%%"%((i+1)/len(se_words)*100))
+        sys.stdout.write("\r% 5.2f%%" % ((i+1)/len(se_words)*100))
         return idxs
-    
+
     words = model.wv.index2word
+    se_words = df['pos']
     se_idxs = pd.Series(
         [get_idxs(i, ws) for i, ws in enumerate(se_words)],
-        index=se_words.index
+        index=df.index
     )
-    
-    pd.to_pickle(se_idxs, "./data/se_idxs")
+
+    df['pos'] = se_idxs
+    pd.to_pickle(df, "./data/se_idxs")
 
 
 if __name__ == "__main__":
@@ -107,10 +110,10 @@ if __name__ == "__main__":
     print("[embedding.py] Loading data ...")
     df = load_df(100)
     print("[embedding.py] Merging word and pos ...")    
-    se_words = get_se_words(df)
+    df = get_words(df)
     print()
     print("[embedding.py] Saving embedding model ...")   
-    save_w2v_model(se_words)
+    save_w2v_model(df)
 
     print("[embedding.py] Loading embedding model ...")
     model = load_model()
@@ -118,5 +121,5 @@ if __name__ == "__main__":
     save_lookup_table(model)
     print()
     print("[embedding.py] Saving index series ...")
-    save_se_idxs(model, se_words)
+    save_df_idxs(model, df)
     print()
