@@ -33,21 +33,6 @@ def save_df_pos(df, label):
         nonlocal df
         sys.stdout.write("\r% 5.2f%%"%((i+1)/len(df)*100))
         return np.array(pos)
-    
-    def get_fake(i, text):
-        original_idxs = np.array(range(len(text)))
-        idxs = original_idxs.copy()
-        while True:
-            i1, i2 = np.random.choice(idxs, 2, replace=False)
-            idxs[i1], idxs[i2] = idxs[i2], idxs[i1]
-            sim = sum(idxs == original_idxs)
-            length = len(idxs)
-            if length*0.6 < sim < length*0.8:
-                text = text[idxs]
-                break
-        nonlocal df
-        sys.stdout.write("\r% 5.2f%%"%((i+1)/len(df)*100))
-        return text
 
     np.random.seed(0)
     idxs = df.index
@@ -55,14 +40,7 @@ def save_df_pos(df, label):
     poses = [get_pos(i, t) for i, t in enumerate(df['text'])]
     df = pd.DataFrame({'pos': poses}, index=idxs)
 
-    df.to_pickle('./data/df_pos_text_%s' % label)
-    
-    print()
-
-    fakes = [get_fake(i, t) for i, t in enumerate(df['pos'])]
-    df = pd.DataFrame({'pos': fakes}, index=idxs)
-
-    df.to_pickle('./data/df_pos_fake_%s' % label)
+    df.to_pickle('./data/df_pos_%s' % label)
 
 
 if __name__ == "__main__":
