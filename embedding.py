@@ -105,6 +105,29 @@ def save_df(model, df):
     pd.to_pickle(df, "./data/df")
 
 
+def save_fake(df):
+
+    def get_fake(i, pos):
+        fake = pos.copy()
+        len_ = len(fake)
+        idxs = list(range(len_))
+        try_ = 0
+        while True:
+            a, b = np.random.choice(idxs, 2, replace=False)
+            fake[a], fake[b] = fake[b], fake[a]
+            if sum(pos == fake) < len_*0.7:
+                break
+            if try_ > len_:
+                break
+        sys.stdout.write("\r%5.2f%%" % ((i+1)/len(df)*100))
+        return fake
+        
+    df_fake = df.copy()
+    df_fake['pos'] = [get_fake(i, p) for i, p in enumerate(df['pos'])]
+    
+    df_fake.to_pickle('./data/df_fake')
+
+
 if __name__ == "__main__":
 
     print("[embedding.py] Loading data ...")
@@ -123,3 +146,7 @@ if __name__ == "__main__":
     print("[embedding.py] Saving final dataframe ...")
     save_df(model, df)
     print()
+    print("[embedding.py] Saving fake dataframe ...")
+    save_fake(df)
+    print()
+    

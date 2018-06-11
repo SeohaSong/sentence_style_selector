@@ -29,6 +29,7 @@ def process_df(df):
             text = ''
         if re.compile(r'.*\w{10}.*').search(text):
             text = ''
+        # 4번 이상 반복 제한 추가
         else:
             text = re.sub(r'[.,!?]', ' ', text)
             text = re.sub(r'\s+', ' ', text)
