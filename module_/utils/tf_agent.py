@@ -134,7 +134,6 @@ class TF_Agent():
 
         def wake(sen, reuse, y_label, y_valid):
             with tf.variable_scope('wake', reuse=reuse):
-                #0
                 lstm_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(256)
                 lstm_cell_bw = tf.nn.rnn_cell.BasicLSTMCell(256)
                 outputs, _ = tf.nn.bidirectional_dynamic_rnn(
@@ -146,25 +145,29 @@ class TF_Agent():
                 conv_bn = tf.layers.batch_normalization(conv)
                 conv_sg = tf.nn.sigmoid(conv_bn)
                 latent = tf.layers.dropout(conv_sg, 0.2)
-                #00
                 d0_l = tf.layers.dropout(
-                    tf.layers.dense(latent, 64, activation=tf.sigmoid), 0.2
+                    tf.layers.dense(latent, 128, activation=tf.nn.relu), 0.2
                 )
-                d1_l = tf.layers.dense(d0_l, 2, activation=tf.nn.softmax)
+                d1_l = tf.layers.dropout(
+                    tf.layers.dense(d0_l, 64, activation=tf.nn.relu), 0.2
+                )
+                d2_l = tf.layers.dense(d1_l, 2, activation=tf.nn.softmax)
                 d0_v = tf.layers.dropout(
-                    tf.layers.dense(latent, 64, activation=tf.sigmoid), 0.2
+                    tf.layers.dense(latent, 128, activation=tf.nn.relu), 0.2
                 )
-                d1_v = tf.layers.dense(d0_v, 2, activation=tf.nn.softmax)
-                #01
-                loss_l = tf.losses.softmax_cross_entropy(y_label, d1_l)        
-                loss_v = tf.losses.softmax_cross_entropy(y_valid, d1_v)
+                d1_v = tf.layers.dropout(
+                    tf.layers.dense(d0_v, 64, activation=tf.nn.relu), 0.2
+                )
+                d2_v = tf.layers.dense(d1_v, 2, activation=tf.nn.softmax)
+                loss_l = tf.losses.softmax_cross_entropy(y_label, d2_l)        
+                loss_v = tf.losses.softmax_cross_entropy(y_valid, d2_v)
                 self.acc_l = tf.reduce_mean(tf.cast(
-                    tf.equal(tf.argmax(d1_l, axis=1),
+                    tf.equal(tf.argmax(d2_l, axis=1),
                              tf.argmax(y_label, axis=1)),
                     dtype=tf.float32
                 ))
                 self.acc_v = tf.reduce_mean(tf.cast(
-                    tf.equal(tf.argmax(d1_v, axis=1),
+                    tf.equal(tf.argmax(d2_v, axis=1),
                              tf.argmax(y_valid, axis=1)),
                     dtype=tf.float32
                 ))
@@ -214,12 +217,12 @@ class TF_Agent():
 
         loss_l, loss_v, output, latent = wake(X_ebd, False, y_label, y_valid)
         gen, loss_gen, sleep_vars = sleep(output, latent, y_label, X_ebd)
-        loss_w = loss_l+loss_v*10+loss_gen
+        loss_w = loss_l+loss_v*5+loss_gen
         self.loss_total_w = loss_w
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
         
-        loss_l_s, loss_v_s, = wake(gen, True, y_label, y_valid)
-        loss_s = loss_l_s+loss_v_s+loss_gen*10
+        loss_l_s, loss_v_s = wake(gen, True, y_label, y_valid)
+        loss_s = loss_l_s+loss_v_s+loss_gen*5
         self.loss_total_s = loss_s
         self.learn_s = tf.train.AdamOptimizer().minimize(
             loss_s, var_list=sleep_vars
