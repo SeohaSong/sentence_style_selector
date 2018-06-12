@@ -4,13 +4,9 @@ import numpy as np
 import sys
 
 
-def load_data(n_batch=None):
+def load_data():
 
     df = pd.read_csv("./data/watcha_movie_review.csv")
-    if n_batch:
-        np.random.seed(0)
-        idxs = np.random.choice(df.index, n_batch, replace=False)
-        df = df.loc[idxs]
 
     return df
 
@@ -103,7 +99,7 @@ if __name__ == "__main__":
     print("[preprocess.py] Processing data ...")
     df = process_df(df)
     print("")
-    print("[preprocess.py] Calculating meta information ...")
+    print("[preprocess.py] Calculating boundary ...")
     boundary = get_boundary(df)
     print("[preprocess.py] Concatenating label ...")    
     df = concat_lebel(df, boundary)
