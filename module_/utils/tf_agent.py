@@ -16,29 +16,44 @@ class TF_Agent():
         np.random.seed(0)
         
         df = pd.read_pickle('./data/df')
+
         idx = np.array(df.index)
         np.random.shuffle(idx)
         df = df.loc[idx]
-        self.df = df[df['label'] != 'neu']
+
+        df = df[df['label'] != 'neu']
+        df_wake = df
+        df_sleep = df[df['valid'] == 'real']
+        df_sleep = pd.concat([df_sleep, df_sleep], axis=0)
+
+        idxs = np.random.choice(range(len(df)), 10000, replace=False)
+        self.df_wake = df_wake.iloc[idxs]
+        self.df_sleep = df_sleep.iloc[idxs]
         
         model = Word2Vec.load('./data/w2v_model')
         self.i2w = model.wv.index2word
         
         self.table = pd.read_pickle('./data/lookup_table')
 
+        tf.reset_default_graph()
+        self.graph = tf.get_default_graph()
+
     def set_hyper_parameters(self, batch_size):
 
-        df = self.df
+        df_wake = self.df_wake
         
         self.batch_size = batch_size
-        self.n_batch = len(df) // batch_size
+        self.n_batch = len(df_wake) // batch_size
         self.n_epoch = 0
     
-    def get_batch(self, i):
+    def get_batch(self, i, case):
     
         n_batch = self.n_batch
         batch_size = self.batch_size
-        df = self.df
+        if case == 'wake':
+            df = self.df_wake
+        else:
+            df = self.df_sleep
     
         def get_X(sen):
             X = np.zeros(64, dtype=np.int32)-1
@@ -59,21 +74,45 @@ class TF_Agent():
                
         start, end = i*batch_size, (i+1)*batch_size
         df = df[start:end]
-        
+
         Xs = np.array([get_X(sen) for sen in df['pos']])
         y_labels = np.array([get_y_label(label) for label in df['label']])
         y_valids = np.array([get_y_valid(label) for label in df['valid']])
+        if case == 'sleep':
+            y_labels = (y_labels+np.array([-1, -1]))*-1
+            y_valids = (y_valids+np.array([-1, -1]))*-1
         
         if n_batch == i+1:
             self.n_epoch += 1
 
         return Xs, y_labels, y_valids
     
-    def convet_a2s(self, array):
+    def check_sen(self, idx):
+        
+        X = self.X
+        y_label = self.y_label
+        gen = self.gen
+        sess = self.sess
 
+        df = self.df_wake
         i2w = self.i2w
         table = self.table
-        
+
+        one = df.iloc[idx]
+
+        lst = np.zeros(64, dtype=np.int32)-1
+        lst[:len(one['pos'])] = one['pos']
+
+        label = np.array([0, 0])
+        label[['neg', 'pos'].index(one['label'])] = 1
+        label = (label-np.array([1, 1]))*-1
+
+        mat = sess.run(gen, feed_dict={X: [lst], y_label: [label]})[0]
+
+        def convert_lst2sen(lst):
+            sen = ' '.join([i2w[i].split("-")[0] for i in lst if i > 0])
+            return sen
+
         def get_word(i, v):
             idx = np.linalg.norm(table-v, axis=1).argmin()
             if idx == len(i2w):
@@ -81,131 +120,123 @@ class TF_Agent():
             else:
                 word = i2w[idx]
                 word = word.split("-")[0]
-            sys.stdout.write("\r%5.2f%%" % ((i+1)/len(array)*100))
+            sys.stdout.write("\r%5.2f%%" % ((i+1)/len(mat)*100))
             return word
 
-        sen = ' '.join([get_word(i, v) for i, v in enumerate(array)])
+        sen_real = convert_lst2sen(lst)
+        words = [get_word(i, v) for i, v in enumerate(mat)]
+        sen_gen = ' '.join([w for w in words if w != ' '])
         print()
 
-        return sen
-
-    def convet_l2s(self, l):
-        i2w = self.i2w    
-        sen = ' '.join([i2w[i].split("-")[0] for i in l])
-        return sen
+        return sen_real, sen_gen
 
     def init_graph(self):
         
         table = self.table
 
-        tf.reset_default_graph()
-        self.graph = tf.get_default_graph()
+        def wake(sen, reuse):
+            with tf.variable_scope('wake', reuse=reuse):
+                #0
+                lstm_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(256)
+                lstm_cell_bw = tf.nn.rnn_cell.BasicLSTMCell(256)
+                outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+                    lstm_cell_fw, lstm_cell_bw, sen, dtype=tf.float32
+                )
+                output = tf.concat(outputs, axis=1)
+                conv = tf.reshape(tf.layers.conv1d(output, 256, 128),
+                                  [-1, 256])
+                conv_bn = tf.layers.batch_normalization(conv)
+                conv_sg = tf.nn.sigmoid(conv_bn)
+                latent = tf.layers.dropout(conv_sg, 0.2)
+                #00
+                d0_l = tf.layers.dropout(
+                    tf.layers.dense(latent, 64, activation=tf.sigmoid), 0.2
+                )
+                d1_l = tf.layers.dense(d0_l, 2, activation=tf.nn.softmax)
+                d0_v = tf.layers.dropout(
+                    tf.layers.dense(latent, 64, activation=tf.sigmoid), 0.2
+                )
+                d1_v = tf.layers.dense(d0_v, 2, activation=tf.nn.softmax)
+                #01
+                loss_l = tf.losses.softmax_cross_entropy(y_label, d1_l)        
+                loss_v = tf.losses.softmax_cross_entropy(y_valid, d1_v)
+                self.acc_l = tf.reduce_mean(tf.cast(
+                    tf.equal(tf.argmax(d1_l, axis=1),
+                             tf.argmax(y_label, axis=1)),
+                    dtype=tf.float32
+                ))
+                self.acc_v = tf.reduce_mean(tf.cast(
+                    tf.equal(tf.argmax(d1_v, axis=1),
+                             tf.argmax(y_valid, axis=1)),
+                    dtype=tf.float32
+                ))
+            if reuse == False:
+                return loss_l, loss_v, output, latent
+            else:
+                return loss_l, loss_v,
+
+        def sleep(output, latent, y_label, X_ebd):
+            with tf.variable_scope('sleep') as scope:
+                output_l = tf.concat([
+                    tf.reshape(latent, shape=[-1, 1, 256]),
+                    output
+                ], axis=1)
+                output_s = tf.concat([
+                    output_l,
+                    tf.transpose(
+                        tf.zeros(shape=[129, tf.shape(y_label)[0], 2])+y_label,
+                        [1, 0, 2]
+                    )
+                ], axis=2)
+                lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=512)
+                output_g, _ = tf.nn.dynamic_rnn(
+                    lstm_cell, output_s, dtype=tf.float32
+                )
+                w = tf.Variable(tf.truncated_normal([64, 129],
+                                                    dtype=tf.float32))
+                b = tf.Variable(tf.truncated_normal([64, 512],
+                                                    dtype=tf.float32))
+                gen = tf.map_fn(lambda x: tf.matmul(w, x)+b, output_g)
+                loss_gen = tf.losses.mean_squared_error(X_ebd, gen)
+                sleep_vars = scope.global_variables()
+                self.loss_gen = loss_gen
+                self.gen = gen
+            return gen, loss_gen, sleep_vars
 
         X = tf.placeholder(dtype=tf.int32, shape=[None, 64])
         y_label = tf.placeholder(dtype=tf.float32, shape=[None, 2])
         y_valid = tf.placeholder(dtype=tf.float32, shape=[None, 2])
-        style = tf.placeholder(dtype=tf.float32, shape=[None, 2])
-
         self.X = X
         self.y_label = y_label
         self.y_valid = y_valid
-        self.style = style
 
         lookup_table = tf.Variable(table, dtype=tf.float32)
         X_ebd = tf.nn.embedding_lookup(lookup_table, X)
+        self.lookup_table = lookup_table
 
-        lstm_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(256)
-        lstm_cell_bw = tf.nn.rnn_cell.BasicLSTMCell(256)
-        outputs, _ = tf.nn.bidirectional_dynamic_rnn(
-            lstm_cell_fw, lstm_cell_bw, X_ebd, dtype=tf.float32
+        loss_l, loss_v, output, latent = wake(X_ebd, False)
+        gen, loss_gen, sleep_vars = sleep(output, latent, y_label, X_ebd)
+        loss_w = loss_l+loss_v+loss_gen*10
+        self.loss_total_w = loss_w
+        self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
+        
+        loss_l_s, loss_v_s, = wake(gen, True)
+        loss_s = loss_l_s+loss_v_s+loss_gen*10
+        self.loss_total_s = loss_s
+        self.learn_s = tf.train.AdamOptimizer().minimize(
+            loss_s, var_list=sleep_vars
         )
-        output = tf.concat(outputs, axis=1)
-
-        conv = tf.reshape(tf.layers.conv1d(output, 256, 128), [-1, 256])
-        conv_bn = tf.layers.batch_normalization(conv)
-        conv_sg = tf.nn.sigmoid(conv_bn)
-        latent = tf.layers.dropout(conv_sg, 0.2)
-
-        ############ for wake ##########
-        w0_label = tf.Variable(tf.truncated_normal([256, 64],
-                                                dtype=tf.float32))
-        b0_label = tf.Variable(tf.truncated_normal([64],
-                                                dtype=tf.float32))
-        a0_label = tf.nn.softmax(tf.matmul(latent, w0_label)+b0_label)
-        d0_label = tf.layers.dropout(a0_label, 0.2)
-        w1_label = tf.Variable(tf.truncated_normal([64, 2],
-                                                dtype=tf.float32))
-        b1_label = tf.Variable(tf.truncated_normal([2],
-                                                dtype=tf.float32))
-        a1_label = tf.nn.softmax(tf.matmul(d0_label, w1_label)+b1_label)
-
-        w0_valid = tf.Variable(tf.truncated_normal([256, 64],
-                                                dtype=tf.float32))
-        b0_valid = tf.Variable(tf.truncated_normal([64],
-                                                dtype=tf.float32))
-        a0_valid = tf.nn.softmax(tf.matmul(latent, w0_valid)+b0_valid)
-        d0_valid = tf.layers.dropout(a0_valid, 0.2)
-        w1_valid = tf.Variable(tf.truncated_normal([64, 2],
-                                                dtype=tf.float32))
-        b1_valid = tf.Variable(tf.truncated_normal([2],
-                                                dtype=tf.float32))
-        a1_valid = tf.nn.softmax(tf.matmul(d0_valid, w1_valid)+b1_valid)
-
-        loss_label = tf.losses.softmax_cross_entropy(y_label, a1_label)        
-        loss_valid = tf.losses.softmax_cross_entropy(y_valid, a1_valid)
-
-        self.acc_label = tf.reduce_mean(tf.cast(
-            tf.equal(tf.argmax(a1_label, axis=1), tf.argmax(y_label, axis=1)),
-            dtype=tf.float32
-        ))
-        self.acc_valid = tf.reduce_mean(tf.cast(
-            tf.equal(tf.argmax(a1_valid, axis=1), tf.argmax(y_valid, axis=1)),
-            dtype=tf.float32
-        ))
-        ############ for wake ##########
-
-        ############ for sleep #########
-        output_l = tf.concat([
-            tf.reshape(latent, shape=[-1, 1, 256]),
-            output
-        ], axis=1)
-
-        output_s = tf.concat([
-            output_l,
-            tf.transpose(tf.zeros(shape=[129, 128, 2])+style, [1, 0, 2])
-        ], axis=2)
-
-        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=512)
-        output_gen, _ = tf.nn.dynamic_rnn(
-            lstm_cell, output_s, dtype=tf.float32
-        )
-
-        w_gen = tf.Variable(tf.truncated_normal([64, 128+1], dtype=tf.float32))
-        b_gen = tf.Variable(tf.truncated_normal([64, 512], dtype=tf.float32))
-        f_gen = tf.map_fn(lambda x: tf.matmul(w_gen, x)+b_gen, output_gen)
-        self.sentence = f_gen
-
-        loss_gen = tf.losses.mean_squared_error(X_ebd, f_gen)
-        self.acc_gen = loss_gen
-        ############ for sleep #########
-
-        loss = loss_label+loss_valid+loss_gen
-        self.loss_total = loss
-        self.learn = tf.train.AdamOptimizer().minimize(loss)
 
         self.initializer = tf.global_variables_initializer()
 
     def init_sess(self):
-
         graph = self.graph
         initializer = self.initializer
-
         sess = tf.Session(graph=graph)
         sess.run(initializer)
-
         self.sess = sess
 
-    def run_sess(self):
+    def run_sess_wake(self):
 
         n_iter = self.n_batch
         get_batch = self.get_batch
@@ -216,32 +247,75 @@ class TF_Agent():
         X = self.X 
         y_label = self.y_label
         y_valid = self.y_valid
-        style = self.style
 
-        acc_label = self.acc_label
-        acc_valid = self.acc_valid
-        acc_gen = self.acc_gen
-        loss_total = self.loss_total
-        learn = self.learn
+        acc_l = self.acc_l
+        acc_v = self.acc_v
+        loss_gen = self.loss_gen
+        loss_total_w = self.loss_total_w
+        learn_w = self.learn_w
+
+        lookup_table = self.lookup_table
 
         for i in range(n_iter):
-            train_X, train_y_label, train_y_valid = get_batch(i)
-            acc_label_, acc_valid_, acc_gen_, loss_total_, _ = sess.run(
-                [acc_label, acc_valid, acc_gen, loss_total, learn],
+            tr_X, tr_y_label, tr_y_valid = get_batch(i, 'wake')
+            acc_l_, acc_v_, loss_gen_, loss_total_w_, _ = sess.run(
+                [acc_l, acc_v, loss_gen, loss_total_w, learn_w],
                 feed_dict={
-                    X: train_X,
-                    y_label: train_y_label,
-                    y_valid: train_y_valid,
-                    style: train_y_label
+                    X: tr_X,
+                    y_label: tr_y_label,
+                    y_valid: tr_y_valid
                 }
             )
             sys.stdout.write(
-                "\r% 5d | %5.2f%% | %8.7f | %8.7f | %8.7f | %8.7f"
+                ("\repoch % 3d %5.2f%% | acc-l %8.7f | "
+                 +"acc-v %8.7f | loss-gen %8.7f | total-loss-w %8.7f")
                 % (n_epoch,
                 ((i+1)/n_iter*100),
-                acc_label_,
-                acc_valid_,
-                acc_gen_,
-                loss_total_)
+                acc_l_,
+                acc_v_,
+                loss_gen_,
+                loss_total_w_)
+            )
+        print()
+
+        self.table = sess.run(lookup_table)
+
+    def run_sess_sleep(self):
+
+        n_iter = self.n_batch
+        get_batch = self.get_batch
+        n_epoch = self.n_epoch
+
+        sess = self.sess
+
+        X = self.X 
+        y_label = self.y_label
+        y_valid = self.y_valid
+
+        acc_l = self.acc_l
+        acc_v = self.acc_v
+        loss_gen = self.loss_gen
+        loss_total_s = self.loss_total_s
+        learn_s = self.learn_s
+
+        for i in range(n_iter):
+            tr_X, tr_y_label, tr_y_valid = get_batch(i, 'sleep')
+            acc_l_, acc_v_, loss_gen_, loss_total_s_, _ = sess.run(
+                [acc_l, acc_v, loss_gen, loss_total_s, learn_s],
+                feed_dict={
+                    X: tr_X,
+                    y_label: tr_y_label,
+                    y_valid: tr_y_valid
+                }
+            )
+            sys.stdout.write(
+                ("\repoch % 3d %5.2f%% | acc-l %8.7f | "
+                 +"acc-v %8.7f | loss-gen %8.7f | total-loss-s %8.7f")
+                % (n_epoch,
+                ((i+1)/n_iter*100),
+                acc_l_,
+                acc_v_,
+                loss_gen_,
+                loss_total_s_)
             )
         print()
