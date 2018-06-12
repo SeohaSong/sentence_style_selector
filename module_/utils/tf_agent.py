@@ -78,8 +78,7 @@ class TF_Agent():
         y_labels = np.array([get_y_label(label) for label in df['label']])
         y_valids = np.array([get_y_valid(label) for label in df['valid']])
         if case == 'sleep':
-            y_labels = (y_labels+np.array([-1, -1]))*-1
-            y_valids = (y_valids+np.array([-1, -1]))*-1
+            y_labels = (y_labels-np.array([1, 1]))*-1
         
         if n_batch == i+1:
             self.n_epoch += 1
@@ -215,7 +214,7 @@ class TF_Agent():
 
         loss_l, loss_v, output, latent = wake(X_ebd, False, y_label, y_valid)
         gen, loss_gen, sleep_vars = sleep(output, latent, y_label, X_ebd)
-        loss_w = loss_l+loss_v+loss_gen
+        loss_w = loss_l+loss_v*10+loss_gen
         self.loss_total_w = loss_w
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
         
