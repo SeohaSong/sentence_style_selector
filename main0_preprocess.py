@@ -30,7 +30,7 @@ def process_df(df):
             skip = True
         if not skip and re.compile(r'(.+?)\1{3}').search(text):
             skip = True
-        elif not skip:
+        if not skip:
             text = re.sub(r'[.,!?]', ' ', text)
             text = re.sub(r'\s+', ' ', text)
             text = re.sub(r'^ ', '', text)
@@ -90,7 +90,6 @@ def concat_lebel(df, boundary):
 
 
 def save_df(df):
-
     df.to_pickle("./data/df_watcha")
 
 
