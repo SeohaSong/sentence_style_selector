@@ -81,14 +81,17 @@ class TF_Agent():
             else:
                 word = i2w[idx]
                 word = word.split("-")[0]
-                word = word+" "
             sys.stdout.write("\r%5.2f%%" % ((i+1)/len(array)*100))
             return word
 
-        sen = ''.join([get_word(i, v) for i, v in enumerate(array)])
+        sen = ' '.join([get_word(i, v) for i, v in enumerate(array)])
         print()
-        sen = sen[:-1]
 
+        return sen
+
+    def convet_l2s(self, l):
+        i2w = self.i2w    
+        sen = ' '.join([i2w[i].split("-")[0] for i in l])
         return sen
 
     def get_graph(self):
