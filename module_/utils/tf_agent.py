@@ -12,8 +12,8 @@ class TF_Agent():
     
     def _initialize(self):
 
-        tf.set_random_seed(0)
-        np.random.seed(0)
+        tf.set_random_seed(50554145)
+        np.random.seed(50554145)
         
         df = pd.read_pickle('./data/df')
         df = df[df['label'] != 'neu']
@@ -133,7 +133,7 @@ class TF_Agent():
         
         table = self.table
 
-        def wake(sen, reuse):
+        def wake(sen, reuse, y_label, y_valid):
             with tf.variable_scope('wake', reuse=reuse):
                 #0
                 lstm_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(256)
@@ -213,13 +213,13 @@ class TF_Agent():
         X_ebd = tf.nn.embedding_lookup(lookup_table, X)
         self.lookup_table = lookup_table
 
-        loss_l, loss_v, output, latent = wake(X_ebd, False)
+        loss_l, loss_v, output, latent = wake(X_ebd, False, y_label, y_valid)
         gen, loss_gen, sleep_vars = sleep(output, latent, y_label, X_ebd)
         loss_w = loss_l+loss_v+loss_gen
         self.loss_total_w = loss_w
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
         
-        loss_l_s, loss_v_s, = wake(gen, True)
+        loss_l_s, loss_v_s, = wake(gen, True, y_label, y_valid)
         loss_s = loss_l_s+loss_v_s+loss_gen*10
         self.loss_total_s = loss_s
         self.learn_s = tf.train.AdamOptimizer().minimize(
