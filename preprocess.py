@@ -17,31 +17,33 @@ def load_data(n_batch=None):
 
 def process_df(df):
 
-    def process(i, text):
+    df = df.copy()
+    df = df[df['point'] > 0]
+
+    def process(i, text, skip=False):
         text = str(text)
         text = re.sub(r'[^\w,.!?\s]', ' ', text)
         text = re.sub(r'\d+', '0 ', text)
         text = re.sub(r'\s+', ' ', text)
         text = re.sub(r'(\d+\s)+', '0 ', text)
         if not 50 < len(text) <= 100:
-            text = ''
-        if re.compile(r'[a-zA-Zㄱ-ㅎㅏ-ㅣ]').search(text):
-            text = ''
-        if re.compile(r'.*\w{10}.*').search(text):
-            text = ''
-        # 4번 이상 반복 제한 추가
-        else:
+            skip = True
+        if not skip and re.compile(r'[a-zA-Zㄱ-ㅎㅏ-ㅣ]').search(text):
+            skip = True
+        if not skip and re.compile(r'\w{10}').search(text):
+            skip = True
+        if not skip and re.compile(r'(.+?)\1{3}').search(text):
+            skip = True
+        elif not skip:
             text = re.sub(r'[.,!?]', ' ', text)
             text = re.sub(r'\s+', ' ', text)
             text = re.sub(r'^ ', '', text)
             text = re.sub(r' $', '', text)
-        # Will be decorator
-        nonlocal df
+        else:
+            text = ''
         sys.stdout.write("\r% 5.2f%%"%((i+1)/len(df)*100))
         return text
         
-    df = df.copy()
-    df = df[df['point'] > 0]
     texts = [process(i, t) for i, t in enumerate(df['text'])]
     df['text'] = texts
     df = df[df['text'] != '']    
@@ -52,21 +54,21 @@ def process_df(df):
 
 def get_meta(df):
 
+    labels = list(set(df['point']))
+    label2count = {key: 0 for key in labels}
+    keys = sorted(list(label2count))
+
     def calc_loss(bound):
-        nonlocal keys
         b0, b1 = keys.index(bound[0]), keys.index(bound[1])
         counts = [label2count[key] for key in keys]
         l0, l1, l2 = counts[:b0], counts[b0:b1], counts[b1:]
         merged_counts = [sum(l0), sum(l1), sum(l2)]
         loss = np.std(merged_counts)
         return loss, merged_counts
-
-    labels = list(set(df['point']))
-    label2count = {key: 0 for key in labels}
+    
     for point in df['point']:
         label2count[point] += 1
         
-    keys = sorted(list(label2count))
     bounds = [[keys[i], keys[j]]
               for i in range(len(keys))
               for j in range(i+1, len(keys))]
