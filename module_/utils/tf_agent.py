@@ -16,19 +16,18 @@ class TF_Agent():
         np.random.seed(0)
         
         df = pd.read_pickle('./data/df')
-
-        idx = np.array(df.index)
-        np.random.shuffle(idx)
-        df = df.loc[idx]
-
         df = df[df['label'] != 'neu']
-        df_wake = df
+
         df_sleep = df[df['valid'] == 'real']
         df_sleep = pd.concat([df_sleep, df_sleep], axis=0)
 
-        idxs = np.random.choice(range(len(df)), 10000, replace=False)
-        self.df_wake = df_wake.iloc[idxs]
-        self.df_sleep = df_sleep.iloc[idxs]
+        idxs = np.array(range(len(df)))
+        np.random.shuffle(idxs)
+        df_wake = df.iloc[idxs]
+        df_sleep = df_sleep.iloc[idxs]
+
+        self.df_wake = df_wake
+        self.df_sleep = df_sleep
         
         model = Word2Vec.load('./data/w2v_model')
         self.i2w = model.wv.index2word
@@ -94,7 +93,7 @@ class TF_Agent():
         gen = self.gen
         sess = self.sess
 
-        df = self.df_wake
+        df = self.df_sleep
         i2w = self.i2w
         table = self.table
 
@@ -216,7 +215,7 @@ class TF_Agent():
 
         loss_l, loss_v, output, latent = wake(X_ebd, False)
         gen, loss_gen, sleep_vars = sleep(output, latent, y_label, X_ebd)
-        loss_w = loss_l+loss_v+loss_gen*10
+        loss_w = loss_l+loss_v+loss_gen
         self.loss_total_w = loss_w
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
         
