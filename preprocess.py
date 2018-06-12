@@ -52,30 +52,25 @@ def process_df(df):
     return df
 
 
-def get_meta(df):
+def get_boundary(df):
 
-    labels = list(set(df['point']))
-    label2count = {key: 0 for key in labels}
-    keys = sorted(list(label2count))
+    keys = sorted(list(set(df['point'])))
+    p2c = {key: len(df[df['point'] == key]) for key in keys}
 
     def calc_loss(bound):
         b0, b1 = keys.index(bound[0]), keys.index(bound[1])
-        counts = [label2count[key] for key in keys]
+        counts = [p2c[key] for key in keys]
         l0, l1, l2 = counts[:b0], counts[b0:b1], counts[b1:]
         merged_counts = [sum(l0), sum(l1), sum(l2)]
         loss = np.std(merged_counts)
         return loss, merged_counts
-    
-    for point in df['point']:
-        label2count[point] += 1
-        
+
     bounds = [[keys[i], keys[j]]
               for i in range(len(keys))
               for j in range(i+1, len(keys))]
     boundary = min(bounds, key=calc_loss)
-    counts = calc_loss(boundary)[1]
 
-    return boundary, counts, label2count
+    return boundary
 
 
 def concat_lebel(df, boundary):
@@ -87,8 +82,6 @@ def concat_lebel(df, boundary):
             label = 'neu' 
         else:
             label = 'pos'
-        # Will be decorator
-        nonlocal df
         sys.stdout.write("\r% 5.2f%%"%((i+1)/len(df)*100))
         return label
 
@@ -111,7 +104,7 @@ if __name__ == "__main__":
     df = process_df(df)
     print("")
     print("[preprocess.py] Calculating meta information ...")
-    boundary, counts, label2count = get_meta(df)
+    boundary = get_boundary(df)
     print("[preprocess.py] Concatenating label ...")    
     df = concat_lebel(df, boundary)
     print("")
