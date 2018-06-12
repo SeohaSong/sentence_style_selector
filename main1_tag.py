@@ -39,6 +39,5 @@ if __name__ == "__main__":
 
     print("[tag.py] Loading data ...")
     lable2df, labels = load_df()
-
     print("[tag.py] Saving pos dataframe ...")
     save_df_pos(lable2df, labels)

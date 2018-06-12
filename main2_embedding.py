@@ -40,6 +40,7 @@ def save_w2v_model(df):
     n_size = 512
     n_winow = 8
     min_count = 1
+    n_iter = 100
     workers = os.cpu_count()
     sens = [sen.tolist() for sen in df['pos']]
 
@@ -49,14 +50,10 @@ def save_w2v_model(df):
         window=n_winow,
         min_count=min_count,
         workers=workers,
-        iter=100,
+        iter=n_iter,
     )
     
     model.save("./data/w2v_model")
-
-
-def load_model():
-    model = Word2Vec.load("./data/w2v_model")
     return model
 
 
@@ -84,7 +81,7 @@ def save_df(model, df):
 
     def get_true(i, ws):
         idxs = np.array([words.index(w) for w in ws])
-        sys.stdout.write("\r% 5.2f%%" % ((i+1)/len(df)*100))
+        sys.stdout.write("\r%5.2f%%" % ((i+1)/len(df)*100))
         return idxs
 
     def get_fake(i, pos):
@@ -123,11 +120,8 @@ if __name__ == "__main__":
     print("[embedding.py] Merging word and pos ...")    
     df = get_words(df)
     print("[embedding.py] Saving embedding model ...")   
-    save_w2v_model(df)
-    print("[embedding.py] Loading embedding model ...")
-    model = load_model()
+    model = save_w2v_model(df)
     print("[embedding.py] Saving lookup table ...")
     save_lookup_table(model)
     print("[embedding.py] Saving final dataframe ...")
     save_df(model, df)
-    

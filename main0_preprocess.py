@@ -41,6 +41,7 @@ def process_df(df):
         return text
         
     texts = [process(i, t) for i, t in enumerate(df['text'])]
+    print()
     df['text'] = texts
     df = df[df['text'] != '']    
     df = df.reset_index(drop=True)
@@ -82,6 +83,7 @@ def concat_lebel(df, boundary):
         return label
 
     label = [get_label(i, p) for i, p in enumerate(df['point'])]
+    print()
     df['label'] = label
 
     return df
@@ -98,11 +100,9 @@ if __name__ == "__main__":
     df = load_data()
     print("[preprocess.py] Processing data ...")
     df = process_df(df)
-    print("")
     print("[preprocess.py] Calculating boundary ...")
     boundary = get_boundary(df)
     print("[preprocess.py] Concatenating label ...")    
     df = concat_lebel(df, boundary)
-    print("")
     print("[preprocess.py] Saving ...")
     save_df(df)
