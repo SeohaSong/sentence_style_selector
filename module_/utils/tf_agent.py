@@ -152,8 +152,8 @@ class TF_Agent():
             lstm_cell, logit, dtype=tf.float32
         )
 
-        w_gen = tf.Variable(tf.truncated_normal([128, 256], dtype=tf.float32))
-        b_gen = tf.Variable(tf.truncated_normal([128, 512], dtype=tf.float32))
+        w_gen = tf.Variable(tf.truncated_normal([64, 128], dtype=tf.float32))
+        b_gen = tf.Variable(tf.truncated_normal([64, 512], dtype=tf.float32))
         fin_gen = tf.map_fn(lambda x: tf.matmul(w_gen, x)+b_gen, output_gen)
 
         loss_gen = tf.losses.mean_squared_error(X_ebd, fin_gen)
