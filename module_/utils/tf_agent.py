@@ -28,9 +28,9 @@ class TF_Agent():
 
         idxs = np.array(range(len(df)))
         np.random.shuffle(idxs)
-        self.df_init = df_init.iloc[idxs][:1000]
-        self.df_wake = df_wake.iloc[idxs][:1000]
-        self.df_sleep = df_sleep.iloc[idxs][:1000]
+        self.df_init = df_init.iloc[idxs]
+        self.df_wake = df_wake.iloc[idxs]
+        self.df_sleep = df_sleep.iloc[idxs]
         
         model = Word2Vec.load('./data/w2v_model')
         self.i2w = model.wv.index2word
