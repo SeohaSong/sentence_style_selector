@@ -35,7 +35,6 @@ class TF_Agent():
         df = self.df
         self.batch_size = batch_size
         self.n_batch = len(df) // batch_size
-        self.n_epoch = 0
     
     def get_batch(self, i):
     
@@ -43,7 +42,7 @@ class TF_Agent():
         df = self.df
 
         def get_X(sen):
-            X = np.zeros(64, dtype=np.int32)-1
+            X = np.zeros(64, dtype=np.int32)+len(self.i2w)
             X[:len(sen)] = sen
             return X
 
@@ -148,14 +147,14 @@ class TF_Agent():
         def get_latent(output):
             with tf.variable_scope('latent', reuse=tf.AUTO_REUSE):
                 conv = tf.reshape(tf.layers.conv1d(output, 512, 128),
-                                    [-1, 512])
+                                  [-1, 512])
                 conv_bn = tf.layers.batch_normalization(conv)
                 conv_sg = tf.nn.sigmoid(conv_bn)
                 latent = tf.layers.dropout(conv_sg, 0.5)
             return latent
 
         def sleep(latent, output, sen, y_label):
-            with tf.variable_scope('sleep') as scope:
+            with tf.variable_scope('sleep'):
                 output_l = tf.concat([
                     tf.reshape(latent, shape=[-1, 1, 512]),
                     output
@@ -181,12 +180,11 @@ class TF_Agent():
                                                     dtype=tf.float32))
                 gen = tf.map_fn(lambda x: tf.matmul(w, x)+b, output_g)
                 loss_gen = tf.losses.mean_squared_error(sen, gen)
-                sleep_vars = scope.global_variables()
                 self.loss_gen = loss_gen
                 self.gen = gen
-            return gen, loss_gen, sleep_vars
+            return gen, loss_gen
 
-        def wake(sen, y_label, y_valid):
+        def wake(latent, y_label, y_valid):
             with tf.variable_scope('wake', reuse=tf.AUTO_REUSE):
                 d0_l0 = tf.layers.dropout(
                     tf.layers.dense(latent, 256, activation=tf.sigmoid), 0.5
@@ -229,38 +227,33 @@ class TF_Agent():
         self.X = X
         self.y_label = y_label
 
-        lookup_table = tf.Variable(table, dtype=tf.float32)
-        X_ebd = tf.nn.embedding_lookup(lookup_table, X)
-        self.lookup_table = lookup_table
-        
         y_valid = y_label*0+[0, 1]
         y_valid_s, y_label_s = -1*(y_valid-[1, 1]), -1*(y_label-[1, 1])
         y_valid_c = tf.concat([y_valid, y_valid_s], axis=0)
         y_label_c = tf.concat([y_label, y_label], axis=0)
 
+        lookup_table = tf.Variable(table, dtype=tf.float32)
+        X_ebd = tf.nn.embedding_lookup(lookup_table, X)
+        self.lookup_table = lookup_table
+
         output = get_output(X_ebd)
         latent = get_latent(output)
-        gen, loss_gen, sleep_vars = sleep(latent, output, X_ebd, y_label)
-        gen_const = tf.stop_gradient(gen)
-        sen_c = tf.concat([X_ebd, gen_const], axis=0)
+        gen, loss_gen = sleep(latent, output, tf.stop_gradient(X_ebd), y_label)
+        sen_c = tf.concat([X_ebd, tf.stop_gradient(gen)], axis=0)
 
-        output_c = get_output(sen_c)
-        latent_c = get_latent(output_c)
-        loss_l, loss_v, acc_l, acc_v = wake(latent_c, y_label_c, y_valid_c)
-        loss_w = loss_l+loss_v+loss_gen
-        self.acc_l, self.acc_v = acc_l, acc_v
-        self.learn_w = tf.train.AdamOptimizer(0.0001).minimize(loss_w)
-
-        output_g = get_output(gen)
-        latent_g = get_latent(output_g)
+        loss_l, loss_v, acc_l, acc_v = wake(
+            get_latent(get_output(sen_c)), y_label_c, y_valid_c
+        )
         loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(
-            latent_g, y_label_s, y_valid
+            get_latent(get_output(gen)), y_label_s, y_valid
         )
-        loss_s = loss_l_s+loss_v_s+loss_gen*10
+        self.acc_l, self.acc_v = acc_l, acc_v
         self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
-        self.learn_s = tf.train.AdamOptimizer(0.001).minimize(
-            loss_s, var_list=sleep_vars
-        )
+
+        loss_w = loss_l+loss_v
+        loss_s = loss_l_s+loss_v_s+loss_gen*10
+        self.learn_w = tf.train.AdamOptimizer(0.0001).minimize(loss_w)
+        self.learn_s = tf.train.AdamOptimizer(0.001).minimize(loss_s)
 
         self.initializer = tf.global_variables_initializer()
 
