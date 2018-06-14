@@ -252,8 +252,8 @@ class TF_Agent():
 
         loss_w = loss_l+loss_v
         loss_s = loss_l_s+loss_v_s+loss_gen*10
-        self.learn_w = tf.train.AdamOptimizer(0.0001).minimize(loss_w)
-        self.learn_s = tf.train.AdamOptimizer(0.001).minimize(loss_s)
+        self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
+        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s)
 
         self.initializer = tf.global_variables_initializer()
 
