@@ -17,20 +17,11 @@ class TF_Agent():
         
         df = pd.read_pickle('./data/df')
         df = df[df['label'] != 'neu']
-
-        df_real = df[df['valid'] == 'real']
-        df_fake = df[df['valid'] == 'fake']
-
-        df_init = pd.concat([df_real, df_fake], axis=0)
-        df_sleep = pd.concat([df_real, df_real], axis=0)
-        df_wake = df_sleep.copy()
-        df_wake['valid'] = df_init['valid']
+        df = df[df['valid'] != 'fake']
 
         idxs = np.array(range(len(df)))
         np.random.shuffle(idxs)
-        self.df_init = df_init.iloc[idxs]
-        self.df_wake = df_wake.iloc[idxs]
-        self.df_sleep = df_sleep.iloc[idxs]
+        self.df = df.iloc[idxs]
         
         model = Word2Vec.load('./data/w2v_model')
         self.i2w = model.wv.index2word
@@ -41,27 +32,15 @@ class TF_Agent():
         self.graph = tf.get_default_graph()
 
     def set_hyper_parameters(self, batch_size):
-
-        df_wake = self.df_wake
-        
+        df = self.df
         self.batch_size = batch_size
-        self.n_batch = len(df_wake) // batch_size
+        self.n_batch = len(df) // batch_size
         self.n_epoch = 0
     
-    def get_batch(self, i, case):
+    def get_batch(self, i):
     
         batch_size = self.batch_size
-        sess = self.sess
-        X = self.X 
-        X_ebd_f = self.X_ebd_f
-        y_label = self.y_label
-        gen = self.gen
-        if case == 'init':
-            df = self.df_init
-        elif case == 'wake':
-            df = self.df_wake
-        else:
-            df = self.df_sleep
+        df = self.df
 
         def get_X(sen):
             X = np.zeros(64, dtype=np.int32)-1
@@ -73,49 +52,19 @@ class TF_Agent():
             y = np.array([0, 0])
             y[idx] = 1
             return y
-        
-        def get_y_valid(label):
-            idx = ['fake', 'real'].index(label)
-            y = np.array([0, 0])
-            y[idx] = 1
-            return y
                
         start, end = i*batch_size, (i+1)*batch_size
         df = df[start:end]
 
         Xs = np.array([get_X(sen) for sen in df['pos']])
         y_labels = np.array([get_y_label(label) for label in df['label']])
-        y_valids = np.array([get_y_valid(label) for label in df['valid']])
 
-        if case == 'wake':
-            tr_X = Xs[y_valids[:, 0] == 1]
-            tr_y_labels = (y_labels[y_valids[:, 0] == 1]-np.array([1, 1]))*-1
-            X_ebd_fs = sess.run(
-                gen,
-                feed_dict={
-                    X: tr_X,
-                    X_ebd_f: np.ones([0, 64, 512]),
-                    y_label: tr_y_labels
-                }
-            )
-            Xs = Xs[y_valids[:, 0] == 0]
-            y_labels = y_labels[y_valids[:, 0] == 0]
-            y_valids = y_valids[y_valids[:, 0] == 0]
-            y_labels = np.concatenate([y_labels, tr_y_labels])
-            y_valids = np.concatenate([y_valids, np.array([[1, 0]]*len(tr_X))])
-        else:
-            X_ebd_fs = np.ones([0, 64, 512])
-        if case == 'sleep':
-            y_labels = (y_labels-np.array([1, 1]))*-1
-
-        return Xs, X_ebd_fs, y_labels, y_valids
+        return Xs, y_labels
     
     def check_sen(self, idx):
         
         X = self.X
-        X_ebd_f = self.X_ebd_f
         y_label = self.y_label
-        y_valid = self.y_valid
         gen = self.gen
         prob_l = self.prob_l
         prob_v = self.prob_v
@@ -123,7 +72,7 @@ class TF_Agent():
         acc_v = self.acc_v
         sess = self.sess
 
-        df = self.df_sleep
+        df = self.df
         i2w = self.i2w
         table = self.table
 
@@ -138,9 +87,7 @@ class TF_Agent():
         prob_l_r, prob_v_r, acc_l_r, acc_v_r, [mat] = sess.run(
             [prob_l, prob_v, acc_l, acc_v, gen], feed_dict={
                 X: [lst],
-                X_ebd_f: np.ones([0, 64, 512]),
-                y_label: [label],
-                y_valid: [[0, 1]]
+                y_label: [label]
             }
         )
 
@@ -165,9 +112,7 @@ class TF_Agent():
         prob_l_f, prob_v_f, acc_l_f, acc_v_f = sess.run(
             [prob_l, prob_v, acc_l, acc_v], feed_dict={
                 X: [idxs],
-                X_ebd_f: np.ones([0, 64, 512]),
-                y_label: [label_c],
-                y_valid: [[1, 0]]
+                y_label: [label_c]
             }
         )
         sen_real = convert_lst2sen(lst)
@@ -190,56 +135,29 @@ class TF_Agent():
         
         table = self.table
 
-        def wake(sen, reuse, y_label, y_valid):
-            with tf.variable_scope('wake', reuse=reuse):
-                lstm_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(256)
-                lstm_cell_bw = tf.nn.rnn_cell.BasicLSTMCell(256)
+        def get_output(sen):
+            with tf.variable_scope('output', reuse=tf.AUTO_REUSE):
+                lstm_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(512)
+                lstm_cell_bw = tf.nn.rnn_cell.BasicLSTMCell(512)
                 outputs, _ = tf.nn.bidirectional_dynamic_rnn(
                     lstm_cell_fw, lstm_cell_bw, sen, dtype=tf.float32
                 )
                 output = tf.concat(outputs, axis=1)
-                conv = tf.reshape(tf.layers.conv1d(output, 256, 128),
-                                  [-1, 256])
+            return output
+
+        def get_latent(output):
+            with tf.variable_scope('latent', reuse=tf.AUTO_REUSE):
+                conv = tf.reshape(tf.layers.conv1d(output, 512, 128),
+                                    [-1, 512])
                 conv_bn = tf.layers.batch_normalization(conv)
                 conv_sg = tf.nn.sigmoid(conv_bn)
-                latent = tf.layers.dropout(conv_sg, 0.2)
-                d0_l = tf.layers.dropout(
-                    tf.layers.dense(latent, 128, activation=tf.nn.relu), 0.2
-                )
-                d1_l = tf.layers.dropout(
-                    tf.layers.dense(d0_l, 64, activation=tf.nn.relu), 0.2
-                )
-                d2_l = tf.layers.dense(d1_l, 2, activation=tf.nn.softmax)
-                d0_v = tf.layers.dropout(
-                    tf.layers.dense(latent, 128, activation=tf.nn.relu), 0.2
-                )
-                d1_v = tf.layers.dropout(
-                    tf.layers.dense(d0_v, 64, activation=tf.nn.relu), 0.2
-                )
-                d2_v = tf.layers.dense(d1_v, 2, activation=tf.nn.softmax)
-                loss_l = tf.losses.softmax_cross_entropy(y_label, d2_l)        
-                loss_v = tf.losses.softmax_cross_entropy(y_valid, d2_v)
-                self.acc_l = tf.reduce_mean(tf.cast(
-                    tf.equal(tf.argmax(d2_l, axis=1),
-                             tf.argmax(y_label, axis=1)),
-                    dtype=tf.float32
-                ))
-                self.acc_v = tf.reduce_mean(tf.cast(
-                    tf.equal(tf.argmax(d2_v, axis=1),
-                             tf.argmax(y_valid, axis=1)),
-                    dtype=tf.float32
-                ))
-                self.prob_l = d2_l
-                self.prob_v = d2_v
-            if reuse == False:
-                return loss_l, loss_v, output, latent
-            else:
-                return loss_l, loss_v
+                latent = tf.layers.dropout(conv_sg, 0.5)
+            return latent
 
-        def sleep(output, latent, y_label, X_ebd):
+        def sleep(latent, output, sen, y_label):
             with tf.variable_scope('sleep') as scope:
                 output_l = tf.concat([
-                    tf.reshape(latent, shape=[-1, 1, 256]),
+                    tf.reshape(latent, shape=[-1, 1, 512]),
                     output
                 ], axis=1)
                 output_s = tf.concat([
@@ -249,48 +167,98 @@ class TF_Agent():
                         [1, 0, 2]
                     )
                 ], axis=2)
+                conv = tf.layers.conv1d(output_s, 512, 66)
+                conv_bn = tf.layers.batch_normalization(conv)
+                conv_sg = tf.nn.sigmoid(conv_bn)
+                latent = tf.layers.dropout(conv_sg, 0.5)
                 lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=512)
                 output_g, _ = tf.nn.dynamic_rnn(
-                    lstm_cell, output_s, dtype=tf.float32
+                    lstm_cell, latent, dtype=tf.float32
                 )
-                w = tf.Variable(tf.truncated_normal([64, 129],
+                w = tf.Variable(tf.truncated_normal([64, 64],
                                                     dtype=tf.float32))
                 b = tf.Variable(tf.truncated_normal([64, 512],
                                                     dtype=tf.float32))
                 gen = tf.map_fn(lambda x: tf.matmul(w, x)+b, output_g)
-                loss_gen = tf.losses.mean_squared_error(X_ebd, gen)
+                loss_gen = tf.losses.mean_squared_error(sen, gen)
                 sleep_vars = scope.global_variables()
                 self.loss_gen = loss_gen
                 self.gen = gen
             return gen, loss_gen, sleep_vars
 
-        X = tf.placeholder(dtype=tf.int32, shape=[None, 64])
-        X_ebd_f = tf.placeholder(dtype=tf.float32, shape=[None, 64, 512])
-        y_label = tf.placeholder(dtype=tf.float32, shape=[None, 2])
-        y_valid = tf.placeholder(dtype=tf.float32, shape=[None, 2])
-        self.X = X
-        self.X_ebd_f = X_ebd_f
-        self.y_label = y_label
-        self.y_valid = y_valid
-        
-        lookup_table = tf.Variable(table, dtype=tf.float32)
-        X_ebd_r = tf.nn.embedding_lookup(lookup_table, X)
-        self.lookup_table = lookup_table
-        X_ebd = tf.concat([X_ebd_r, X_ebd_f], axis=0)
+        def wake(sen, y_label, y_valid):
+            with tf.variable_scope('wake', reuse=tf.AUTO_REUSE):
+                d0_l0 = tf.layers.dropout(
+                    tf.layers.dense(latent, 256, activation=tf.sigmoid), 0.5
+                )
+                d0_l = tf.layers.dropout(
+                    tf.layers.dense(d0_l0, 128, activation=tf.sigmoid), 0.5
+                )
+                d1_l = tf.layers.dropout(
+                    tf.layers.dense(d0_l, 64, activation=tf.sigmoid), 0.5
+                )
+                d2_l = tf.layers.dense(d1_l, 2, activation=tf.nn.softmax)
+                d0_v0 = tf.layers.dropout(
+                    tf.layers.dense(latent, 256, activation=tf.sigmoid), 0.5
+                )
+                d0_v = tf.layers.dropout(
+                    tf.layers.dense(d0_v0, 128, activation=tf.sigmoid), 0.5
+                )
+                d1_v = tf.layers.dropout(
+                    tf.layers.dense(d0_v, 64, activation=tf.sigmoid), 0.5
+                )
+                d2_v = tf.layers.dense(d1_v, 2, activation=tf.nn.softmax)
+                loss_l = tf.losses.softmax_cross_entropy(y_label, d2_l)        
+                loss_v = tf.losses.softmax_cross_entropy(y_valid, d2_v)
+                acc_l = tf.reduce_mean(tf.cast(
+                    tf.equal(tf.argmax(d2_l, axis=1),
+                             tf.argmax(y_label, axis=1)),
+                    dtype=tf.float32
+                ))
+                acc_v = tf.reduce_mean(tf.cast(
+                    tf.equal(tf.argmax(d2_v, axis=1),
+                             tf.argmax(y_valid, axis=1)),
+                    dtype=tf.float32
+                ))
+                self.prob_l = d2_l
+                self.prob_v = d2_v
+            return loss_l, loss_v, acc_l, acc_v
 
-        loss_l, loss_v, output, latent = wake(X_ebd, False, y_label, y_valid)
-        gen, loss_gen, sleep_vars = sleep(output, latent, y_label, X_ebd)
-        loss_i = loss_l+loss_v+loss_gen
-        self.loss_total_i = loss_i
-        self.learn_i = tf.train.AdamOptimizer().minimize(loss_i)
-        loss_w = loss_l+loss_v
-        self.loss_total_w = loss_w
-        self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
+        X = tf.placeholder(dtype=tf.int32, shape=[None, 64])
+        y_label = tf.placeholder(dtype=tf.float32, shape=[None, 2])
+        self.X = X
+        self.y_label = y_label
+
+        lookup_table = tf.Variable(table, dtype=tf.float32)
+        X_ebd = tf.nn.embedding_lookup(lookup_table, X)
+        self.lookup_table = lookup_table
         
-        loss_l_s, loss_v_s = wake(gen, True, y_label, y_valid)
-        loss_s = loss_l_s+loss_v_s+loss_gen*3
-        self.loss_total_s = loss_s
-        self.learn_s = tf.train.AdamOptimizer().minimize(
+        y_valid = y_label*0+[0, 1]
+        y_valid_s, y_label_s = -1*(y_valid-[1, 1]), -1*(y_label-[1, 1])
+        y_valid_c = tf.concat([y_valid, y_valid_s], axis=0)
+        y_label_c = tf.concat([y_label, y_label], axis=0)
+
+        output = get_output(X_ebd)
+        latent = get_latent(output)
+        gen, loss_gen, sleep_vars = sleep(latent, output, X_ebd, y_label)
+        gen_const = tf.stop_gradient(gen)
+        sen_c = tf.concat([X_ebd, gen_const], axis=0)
+
+        output_c = get_output(sen_c)
+        latent_c = get_latent(output_c)
+        loss_l, loss_v, acc_l, acc_v = wake(latent_c, y_label_c, y_valid_c)
+        loss_w = loss_l+loss_v+loss_gen
+        self.acc_l, self.acc_v = acc_l, acc_v
+        self.learn_w = tf.train.AdamOptimizer(0.0001).minimize(loss_w)
+
+        output_g = get_output(gen)
+        latent_g = get_latent(output_g)
+        loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(
+            latent_g, y_label_s, y_valid
+        )
+        loss_s = loss_l_s+loss_v_s+loss_gen*10
+        self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
+        self.learn_s = tf.train.AdamOptimizer(0.001).minimize(
             loss_s, var_list=sleep_vars
         )
 
@@ -303,7 +271,7 @@ class TF_Agent():
         sess.run(initializer)
         self.sess = sess
 
-    def run_sess_wake(self, case='wake'):
+    def run_sess(self):
 
         n_iter = self.n_batch
         get_batch = self.get_batch
@@ -311,84 +279,33 @@ class TF_Agent():
         sess = self.sess
 
         X = self.X 
-        X_ebd_f = self.X_ebd_f
         y_label = self.y_label
-        y_valid = self.y_valid
 
-        acc_l = self.acc_l
-        acc_v = self.acc_v
+        acc_l, acc_v = self.acc_l, self.acc_v
+        acc_l_s, acc_v_s = self.acc_l_s, self.acc_v_s
         loss_gen = self.loss_gen
-        if case == 'init':
-            loss_total_w = self.loss_total_i
-            learn_w = self.learn_i
-        elif case == 'wake':
-            loss_total_w = self.loss_total_w
-            learn_w = self.learn_w
+
+        learn_w = self.learn_w
+        learn_s = self.learn_s
 
         lookup_table = self.lookup_table
 
         for i in range(n_iter):
-            tr_X, tr_X_ebd_f, tr_y_label, tr_y_valid = get_batch(i, case)
-            acc_l_, acc_v_, loss_gen_, loss_total_w_, _ = sess.run(
-                [acc_l, acc_v, loss_gen, loss_total_w, learn_w],
-                feed_dict={
-                    X: tr_X,
-                    X_ebd_f: tr_X_ebd_f,
-                    y_label: tr_y_label,
-                    y_valid: tr_y_valid
-                }
+            tr_X, tr_y_label = get_batch(i)
+            acc_l_, acc_v_, acc_l_s_, acc_v_s_, loss_gen_, _, _ = sess.run(
+                [acc_l, acc_v, acc_l_s, acc_v_s, loss_gen, learn_s, learn_w],
+                feed_dict={X: tr_X, y_label: tr_y_label}
             )
             sys.stdout.write(
-                ("\r%5.2f%% | acc-l %8.7f | "
-                 +"acc-v %8.7f | loss-gen %8.7f | total-loss-w %8.7f")
+                ("\r%5.2f%% | acc-l %8.7f | acc-v %8.7f"
+                 +" | acc-l-s %8.7f | acc-v-s %8.7f | loss-gen %8.7f")
                 % (((i+1)/n_iter*100),
                    acc_l_,
                    acc_v_,
-                   loss_gen_,
-                   loss_total_w_)
+                   acc_l_s_,
+                   acc_v_s_,
+                   loss_gen_)
             )
         print()
 
         self.table = sess.run(lookup_table)
-        if case == 'init':
-            self.run_sess_sleep()
-
-    def run_sess_sleep(self):
-
-        n_iter = self.n_batch
-        get_batch = self.get_batch
-
-        sess = self.sess
-
-        X = self.X 
-        X_ebd_f = self.X_ebd_f
-        y_label = self.y_label
-        y_valid = self.y_valid
-
-        acc_l = self.acc_l
-        acc_v = self.acc_v
-        loss_gen = self.loss_gen
-        loss_total_s = self.loss_total_s
-        learn_s = self.learn_s
-
-        for i in range(n_iter):
-            tr_X, tr_X_ebd_f, tr_y_label, tr_y_valid = get_batch(i, 'sleep')
-            acc_l_, acc_v_, loss_gen_, loss_total_s_, _ = sess.run(
-                [acc_l, acc_v, loss_gen, loss_total_s, learn_s],
-                feed_dict={
-                    X: tr_X,
-                    X_ebd_f: tr_X_ebd_f,
-                    y_label: tr_y_label,
-                    y_valid: tr_y_valid
-                }
-            )
-            sys.stdout.write(
-                ("\r%5.2f%% | acc-l %8.7f | "
-                 +"acc-v %8.7f | loss-gen %8.7f | total-loss-s %8.7f")
-                % (((i+1)/n_iter*100),
-                   acc_l_,
-                   acc_v_,
-                   loss_gen_,
-                   loss_total_s_)
-            )
-        print()
