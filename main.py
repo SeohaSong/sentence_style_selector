@@ -29,9 +29,6 @@ class SSS():
         
         self.table = pd.read_pickle('./data/lookup_table')
 
-        tf.reset_default_graph()
-        self.graph = tf.get_default_graph()
-
     def set_hyper_parameters(self, batch_size):
         df = self.df
         self.batch_size = batch_size
@@ -223,6 +220,10 @@ class SSS():
                 self.prob_v = d2_v
             return loss_l, loss_v, acc_l, acc_v
 
+        tf.reset_default_graph()
+        graph = tf.get_default_graph()
+        self.graph = graph
+
         X = tf.placeholder(dtype=tf.int32, shape=[None, 64])
         y_label = tf.placeholder(dtype=tf.float32, shape=[None, 2])
         self.X = X
@@ -259,10 +260,11 @@ class SSS():
         self.initializer = tf.global_variables_initializer()
 
     def init_sess(self):
-        graph = self.graph
+        graph = self.graph        
         initializer = self.initializer
         sess = tf.Session(graph=graph)
         sess.run(initializer)
+        tf.summary.FileWriter('./board').add_graph(graph)        
         self.sess = sess
 
     def run_sess(self):
