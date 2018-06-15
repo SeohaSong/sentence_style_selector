@@ -285,8 +285,12 @@ class TF_Agent():
 
         for i in range(n_iter):
             tr_X, tr_y_label = get_batch(i)
-            acc_l_, acc_v_, acc_l_s_, acc_v_s_, loss_gen_, _, _ = sess.run(
-                [acc_l, acc_v, acc_l_s, acc_v_s, loss_gen, learn_s, learn_w],
+            # acc_l_, acc_v_, acc_l_s_, acc_v_s_, loss_gen_, _, _ = sess.run(
+            #     [acc_l, acc_v, acc_l_s, acc_v_s, loss_gen, learn_w, learn_s],
+            #     feed_dict={X: tr_X, y_label: tr_y_label}
+            # )
+            acc_l_, acc_v_, acc_l_s_, acc_v_s_, loss_gen_, _ = sess.run(
+                [acc_l, acc_v, acc_l_s, acc_v_s, loss_gen, learn_w],
                 feed_dict={X: tr_X, y_label: tr_y_label}
             )
             sys.stdout.write(
