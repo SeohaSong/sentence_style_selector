@@ -12,5 +12,7 @@ gitfree/*
 data/*
 !data/.gitkeep
 
+board/*
+!board/.gitkeep
 
 **/Untitled.ipynb
