@@ -247,7 +247,7 @@ class SSS():
             get_latent(get_output(sen_c)), y_label_c, y_valid_c
         )
         loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(
-            get_latent(get_output(gen)), y_label_s, y_valid
+            tf.stop_gradient(get_latent(get_output(gen))) , y_label_s, y_valid
         )
         self.acc_l, self.acc_v = acc_l, acc_v
         self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
