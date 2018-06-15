@@ -2,10 +2,11 @@ import numpy as np
 import pandas as pd
 import sys
 
-from gensim.models import Word2Vec
 import tensorflow as tf
+from gensim.models import Word2Vec
 
-class TF_Agent():
+
+class SSS():
     
     def __init__(self):
         self._initialize()
@@ -251,7 +252,7 @@ class TF_Agent():
         self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
 
         loss_w = loss_l+loss_v*10
-        loss_s = loss_l_s+loss_v_s+loss_gen*10
+        loss_s = loss_l_s+loss_v_s*10+loss_gen
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
         self.learn_s = tf.train.AdamOptimizer().minimize(loss_s)
 
