@@ -117,14 +117,16 @@ class SSS():
         sen_real = convert_lst2sen(lst)
         sen_gen = ' '.join([get_word(i) for i in idxs if i != len(i2w)])
 
+        label_s = np.flip(label, axis=0)
+        label_c = np.concatenate([label, label_s], axis=0)
         loss_dic = {
-            "real": {
-                'label': (label, prob_l_, acc_l_),
-                'valid': (np.array([0, 1]), prob_v_, acc_v_)
+            "wake": {
+                'label': (label_c, prob_l_, acc_l_),
+                'valid': (prob_v_, acc_v_)
             },
-            "fake": {
-                'label': (np.flip(label, axis=0), prob_l_s_, acc_l_s_),
-                'valid': (np.array([1, 0]), prob_v_s_, acc_v_s_)
+            "sleep": {
+                'label': (label_s, prob_l_s_, acc_l_s_),
+                'valid': (prob_v_s_, acc_v_s_)
             }
         }
 
