@@ -152,7 +152,7 @@ class SSS():
             return latent
 
         def sleep(latent, output, sen, y_label):
-            with tf.variable_scope('sleep'):
+            with tf.variable_scope('sleep') as scope:
                 output_l = tf.concat([
                     tf.reshape(latent, shape=[-1, 1, 512]),
                     output
@@ -180,7 +180,7 @@ class SSS():
                 loss_gen = tf.losses.mean_squared_error(sen, gen)
                 self.loss_gen = loss_gen
                 self.gen = gen
-            return gen, loss_gen
+            return gen, loss_gen, scope.global_variables()
 
         def wake(latent, y_label, y_valid):
             with tf.variable_scope('wake', reuse=tf.AUTO_REUSE):
@@ -240,7 +240,9 @@ class SSS():
 
         output = get_output(X_ebd)
         latent = get_latent(output)
-        gen, loss_gen = sleep(latent, output, tf.stop_gradient(X_ebd), y_label)
+        gen, loss_gen, sleep_vars = sleep(
+            latent, output, tf.stop_gradient(X_ebd), y_label
+        )
         sen_c = tf.concat([X_ebd, tf.stop_gradient(gen)], axis=0)
 
         loss_l, loss_v, acc_l, acc_v = wake(
@@ -255,7 +257,8 @@ class SSS():
         loss_w = loss_l+loss_v*10
         loss_s = loss_l_s+loss_v_s*10+loss_gen
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
-        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s)
+        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s,
+                                                         var_list=sleep_vars)
 
         self.initializer = tf.global_variables_initializer()
 
