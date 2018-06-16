@@ -256,10 +256,12 @@ class SSS():
         self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
 
         loss_w = loss_l+loss_v*10
-        loss_s = loss_l_s+loss_v_s*10+loss_gen
+        loss_s = tf.stop_gradient(loss_l_s+loss_v_s*10)+loss_gen
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
-        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s,
-                                                         var_list=sleep_vars)
+        # self.learn_s = tf.train.AdamOptimizer().minimize(loss_s,
+        #                                                  var_list=sleep_vars)
+        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s)
+        
 
         self.initializer = tf.global_variables_initializer()
 
