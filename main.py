@@ -257,7 +257,7 @@ class SSS():
         # )
         # loss_s = loss_l_s+loss_v_s*10+loss_gen
         loss_s = loss_gen
-        self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
+        # self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
         self.learn_s = tf.train.AdamOptimizer().minimize(loss_s)
 
         self.initializer = tf.global_variables_initializer()
