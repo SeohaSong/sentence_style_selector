@@ -8,10 +8,10 @@ from gensim.models import Word2Vec
 
 class SSS():
     
-    def __init__(self):
-        self._initialize()
+    def __init__(self, sample_size):
+        self._initialize(sample_size)
     
-    def _initialize(self):
+    def _initialize(self, sample_size):
 
         tf.set_random_seed(50554145)
         np.random.seed(50554145)
@@ -22,7 +22,7 @@ class SSS():
 
         idxs = np.array(range(len(df)))
         np.random.shuffle(idxs)
-        self.df = df.iloc[idxs]
+        self.df = df.iloc[idxs][:sample_size]
         
         model = Word2Vec.load('./data/w2v_model')
         self.i2w = model.wv.index2word
