@@ -220,6 +220,15 @@ class SSS():
                 self.prob_v = d2_v
             return loss_l, loss_v, acc_l, acc_v
 
+        def get_vs4s():
+            def get_vs(name):
+                with tf.variable_scope(name) as scope:
+                    vs = scope.global_variables()
+                return vs
+            scope_names = ['latent', 'output', 'sleep']
+            vs = sum([get_vs(name) for name in scope_names], [])
+            return vs
+
         tf.reset_default_graph()
         graph = tf.get_default_graph()
         self.graph = graph
@@ -251,13 +260,14 @@ class SSS():
         loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(
             get_latent(get_output(gen)), y_label_s, y_valid
         )
-                
+
+        vs = get_vs4s()        
         loss_w = loss_l+loss_v*10
         loss_s = loss_l_s+loss_v_s*10+loss_gen
         self.acc_l, self.acc_v = acc_l, acc_v
         self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
-        self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
-        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s)
+        self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)        
+        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s, var_list=vs)
 
         self.initializer = tf.global_variables_initializer()
 
