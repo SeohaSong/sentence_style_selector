@@ -120,18 +120,20 @@ class SSS():
         label = np.array([label])
         label_s = np.flip(label, axis=1)
         label_c = np.concatenate([label, label_s], axis=0)
-        loss_dic = {
+        result = {
             "wake": {
+                'sentence': sen_real,
                 'label': (label_c, prob_l_, acc_l_),
                 'valid': (prob_v_, acc_v_)
             },
             "sleep": {
+                'sentence': sen_gen,
                 'label': (label_s, prob_l_s_, acc_l_s_),
                 'valid': (prob_v_s_, acc_v_s_)
             }
         }
 
-        return sen_real, sen_gen, loss_dic
+        return result
 
     def init_graph(self):
         
