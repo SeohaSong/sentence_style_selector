@@ -248,14 +248,15 @@ class SSS():
         loss_l, loss_v, acc_l, acc_v = wake(
             get_latent(get_output(sen_c)), y_label_c, y_valid_c
         )
-        loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(
-            get_latent(get_output(gen)), y_label_s, y_valid
-        )
         self.acc_l, self.acc_v = acc_l, acc_v
         self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
 
         loss_w = loss_l+loss_v*10
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)
+
+        loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(
+            get_latent(get_output(gen)), y_label_s, y_valid
+        )
         loss_s = loss_l_s+loss_v_s*10+loss_gen
         self.learn_s = tf.train.AdamOptimizer().minimize(loss_s)
 
