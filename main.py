@@ -178,7 +178,6 @@ class SSS():
                                                     dtype=tf.float32))
                 gen = tf.map_fn(lambda x: tf.matmul(w, x)+b, output_g)
                 loss_gen = tf.losses.mean_squared_error(sen, gen)
-                sleep_vars = scope.global_variables()
                 self.loss_gen = loss_gen
                 self.gen = gen
             return gen, loss_gen
