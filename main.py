@@ -60,7 +60,7 @@ class SSS():
 
         return Xs, y_labels
     
-    def check_sen(self, idx):
+    def debug(self, idx):
         
         sess = self.sess
         X = self.X
@@ -122,7 +122,7 @@ class SSS():
         y_l_s = np.flip(y_l, axis=1)
         y_v_s = np.flip(y_v, axis=1)
         y_l_c = np.concatenate([y_l, y_l], axis=0)
-        y_v_c = np.concatenate([y_v, y_l_s], axis=0)
+        y_v_c = np.concatenate([y_v, y_v_s], axis=0)
         result = {
             "wake": {
                 'sentence': sen_real,
@@ -132,7 +132,7 @@ class SSS():
             "sleep": {
                 'sentence': sen_gen,
                 'label': (y_l_s, prob_l_s_, acc_l_s_),
-                'valid': (y_v_s, prob_v_s_, acc_v_s_)
+                'valid': (y_v, prob_v_s_, acc_v_s_)
             }
         }
 
