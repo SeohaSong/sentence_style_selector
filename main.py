@@ -62,29 +62,36 @@ class SSS():
     
     def check_sen(self, idx):
         
+        sess = self.sess
         X = self.X
         y_label = self.y_label
         gen = self.gen
-        prob_l = self.prob_l
-        prob_v = self.prob_v
-        acc_l = self.acc_l
-        acc_v = self.acc_v
-        sess = self.sess
+        prob_l, prob_v = self.prob_l, self.prob_v
+        acc_l, acc_v = self.acc_l, self.acc_v
+        prob_l_s, prob_v_s = self.prob_l_s, self.prob_v_s
+        acc_l_s, acc_v_s = self.acc_l_s, self.acc_v_s
 
         df = self.df
         i2w = self.i2w
         table = self.table
 
         one = df.iloc[idx]
-
         lst = np.zeros(64, dtype=np.int32)-1
         lst[:len(one['pos'])] = one['pos']
-
         label = np.array([0, 0])
         label[['neg', 'pos'].index(one['label'])] = 1
 
-        prob_l_r, prob_v_r, acc_l_r, acc_v_r, [mat] = sess.run(
-            [prob_l, prob_v, acc_l, acc_v, gen], feed_dict={
+        (
+            prob_l_, prob_v_, acc_l_, acc_v_,
+            prob_l_s_, prob_v_s_, acc_l_s_, acc_v_s_,
+            [mat]
+        ) = sess.run(
+            [
+                prob_l, prob_v, acc_l, acc_v,
+                prob_l_s, prob_v_s, acc_l_s, acc_v_s,
+                gen
+            ],
+            feed_dict={
                 X: [lst],
                 y_label: [label]
             }
@@ -107,24 +114,17 @@ class SSS():
         idxs = np.array([get_idx(i, v) for i, v in enumerate(mat)])
         print()
 
-        label_c = (label-np.array([1, 1]))*-1
-        prob_l_f, prob_v_f, acc_l_f, acc_v_f = sess.run(
-            [prob_l, prob_v, acc_l, acc_v], feed_dict={
-                X: [idxs],
-                y_label: [label_c]
-            }
-        )
         sen_real = convert_lst2sen(lst)
         sen_gen = ' '.join([get_word(i) for i in idxs if i != len(i2w)])
 
         loss_dic = {
             "real": {
-                'label': (label, prob_l_r, acc_l_r),
-                'valid': (np.array([0, 1]), prob_v_r, acc_v_r)
+                'label': (label, prob_l_, acc_l_),
+                'valid': (np.array([0, 1]), prob_v_, acc_v_)
             },
             "fake": {
-                'label': (label_c, prob_l_f, acc_l_f),
-                'valid': (np.array([1, 0]), prob_v_f, acc_v_f)
+                'label': (np.flip(label, axis=1), prob_l_s_, acc_l_s_),
+                'valid': (np.array([1, 0]), prob_v_s_, acc_v_s_)
             }
         }
 
