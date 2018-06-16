@@ -117,7 +117,8 @@ class SSS():
         sen_real = convert_lst2sen(lst)
         sen_gen = ' '.join([get_word(i) for i in idxs if i != len(i2w)])
 
-        label_s = np.flip(label, axis=0)
+        label = np.array([label])
+        label_s = np.flip(label, axis=1)
         label_c = np.concatenate([label, label_s], axis=0)
         loss_dic = {
             "wake": {
