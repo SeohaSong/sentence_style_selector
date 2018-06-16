@@ -262,7 +262,7 @@ class SSS():
                                                     y_valid)
 
         vs4w = get_vs(['latent', 'output', 'wake'])
-        vs4s = get_vs(['latent', 'output', 'sleep'])        
+        vs4s = get_vs(['sleep'])        
         loss_w = loss_l+loss_v*10
         loss_s = loss_l_s+loss_v_s*10+loss_gen
         self.acc_l, self.acc_v = acc_l, acc_v
