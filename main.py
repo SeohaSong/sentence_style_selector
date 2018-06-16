@@ -220,12 +220,11 @@ class SSS():
                 self.prob_v = d2_v
             return loss_l, loss_v, acc_l, acc_v
 
-        def get_vs4s():
+        def get_vs(scope_names):
             def get_vs(name):
                 with tf.variable_scope(name) as scope:
                     vs = scope.global_variables()
                 return vs
-            scope_names = ['latent', 'output', 'sleep']
             vs = sum([get_vs(name) for name in scope_names], [])
             return vs
 
@@ -252,22 +251,22 @@ class SSS():
         gen, loss_gen = sleep(
             latent, output, tf.stop_gradient(X_ebd), y_label
         )
-        sen_c = tf.concat([X_ebd, tf.stop_gradient(gen)], axis=0)
 
-        loss_l, loss_v, acc_l, acc_v = wake(
-            get_latent(get_output(sen_c)), y_label_c, y_valid_c
-        )
-        loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(
-            get_latent(get_output(gen)), y_label_s, y_valid
-        )
+        latent_s = get_latent(get_output(gen))
+        latent_c = tf.concat([latent, latent_s], axis=0)
+        loss_l, loss_v, acc_l, acc_v = wake(latent_c, y_label_c, y_valid_c)
+        loss_l_s, loss_v_s, acc_l_s, acc_v_s = wake(latent_s,
+                                                    y_label_s,
+                                                    y_valid)
 
-        vs = get_vs4s()        
+        vs4w = get_vs(['latent', 'output', 'wake'])
+        vs4s = get_vs(['latent', 'output', 'sleep'])        
         loss_w = loss_l+loss_v*10
         loss_s = loss_l_s+loss_v_s*10+loss_gen
         self.acc_l, self.acc_v = acc_l, acc_v
         self.acc_l_s, self.acc_v_s = acc_l_s, acc_v_s
-        self.learn_w = tf.train.AdamOptimizer().minimize(loss_w)        
-        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s, var_list=vs)
+        self.learn_w = tf.train.AdamOptimizer().minimize(loss_w, var_list=vs4w)        
+        self.learn_s = tf.train.AdamOptimizer().minimize(loss_s, var_list=vs4s)
 
         self.initializer = tf.global_variables_initializer()
 
