@@ -152,7 +152,7 @@ class SSS():
             return latent
 
         def sleep(latent, output, sen, y_label):
-            with tf.variable_scope('sleep') as scope:
+            with tf.variable_scope('sleep'):
                 output_l = tf.concat([
                     tf.reshape(latent, shape=[-1, 1, 512]),
                     output
