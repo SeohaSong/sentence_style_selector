@@ -117,19 +117,22 @@ class SSS():
         sen_real = convert_lst2sen(lst)
         sen_gen = ' '.join([get_word(i) for i in idxs if i != len(i2w)])
 
-        label = np.array([label])
-        label_s = np.flip(label, axis=1)
-        label_c = np.concatenate([label, label_s], axis=0)
+        y_l = np.array([label])
+        y_v = np.array([[0, 1]])
+        y_l_s = np.flip(y_l, axis=1)
+        y_v_s = np.flip(y_v, axis=1)
+        y_l_c = np.concatenate([y_l, y_l], axis=0)
+        y_v_c = np.concatenate([y_v, y_l_s], axis=0)
         result = {
             "wake": {
                 'sentence': sen_real,
-                'label': (label_c, prob_l_, acc_l_),
-                'valid': (prob_v_, acc_v_)
+                'label': (y_l_c, prob_l_, acc_l_),
+                'valid': (y_v_c, prob_v_, acc_v_)
             },
             "sleep": {
                 'sentence': sen_gen,
-                'label': (label_s, prob_l_s_, acc_l_s_),
-                'valid': (prob_v_s_, acc_v_s_)
+                'label': (y_l_s, prob_l_s_, acc_l_s_),
+                'valid': (y_v_s, prob_v_s_, acc_v_s_)
             }
         }
 
