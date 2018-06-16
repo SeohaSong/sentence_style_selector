@@ -123,7 +123,7 @@ class SSS():
                 'valid': (np.array([0, 1]), prob_v_, acc_v_)
             },
             "fake": {
-                'label': (np.flip(label), prob_l_s_, acc_l_s_),
+                'label': (np.flip(label, axis=0), prob_l_s_, acc_l_s_),
                 'valid': (np.array([1, 0]), prob_v_s_, acc_v_s_)
             }
         }
