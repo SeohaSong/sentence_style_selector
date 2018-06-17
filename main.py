@@ -227,11 +227,13 @@ class SSS():
             return loss_l, loss_v, acc_l, acc_v, d2_l, d2_v
 
         def get_vs(scope_names):
+            nonlocal lookup_table
             def get_vs(name):
                 with tf.variable_scope(name) as scope:
                     vs = scope.global_variables()
                 return vs
             vs = sum([get_vs(name) for name in scope_names], [])
+            vs = vs+[lookup_table]
             return vs
 
         tf.reset_default_graph()
@@ -254,7 +256,7 @@ class SSS():
         output = get_output(X_ebd)
         latent = get_latent(output)
         gen, loss_gen = sleep(
-            latent, output, tf.stop_gradient(X_ebd), y_label
+            latent, output, X_ebd, y_label
         )
         self.gen, self.loss_gen = gen, loss_gen
 
