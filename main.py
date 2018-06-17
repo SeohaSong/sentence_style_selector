@@ -272,7 +272,7 @@ class SSS():
         self.prob_l_s, self.prob_v_s = prob_l_s, prob_v_s
 
         vs4w = get_vs(['latent', 'output', 'wake'])
-        vs4s = get_vs(['sleep'])
+        vs4s = get_vs(['latent', 'output', 'sleep'])
         loss_w = loss_l+loss_v*10
         loss_s = loss_l_s+loss_v_s*10+loss_gen
         self.learn_w = tf.train.AdamOptimizer().minimize(loss_w, var_list=vs4w)
